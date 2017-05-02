@@ -1,0 +1,25 @@
+import spark.implicits._
+
+import org.apache.spark.sql.functions._
+
+import scala.collection.mutable.WrappedArray
+
+val spark = new org.apache.spark.sql.SQLContext(sc)
+
+val business = spark.read.json("/usr/garima/yelp_academic_dataset_business.json")
+
+val b = business.withColumn("category", explode(
+    when(col("categories").isNotNull, col("categories"))
+    .otherwise(array(lit(null).cast("string")))
+    ))
+
+b.registerTempTable("bizness")
+
+val q3Res=spark.sql("SELECT category,AVG(stars) AS stars from bizness WHERE latitude<=43.2467 and latitude>=42.90833 and longitude>=-89.58389 and longitude<=-89.25056 GROUP BY category ORDER BY stars DESC")
+
+q3Res.write
+  .option("header", "true")
+  .csv("/usr/garima/spark3.csv")
+df.write
+  .option("header", "true")
+  .csv("/usr/arjun/q3Spark.csv")

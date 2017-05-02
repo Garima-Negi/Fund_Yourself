@@ -1,0 +1,19 @@
+import org.apache.spark.sql.functions._
+
+import scala.collection.mutable.WrappedArray
+
+val spark = new org.apache.spark.sql.SQLContext(sc)
+
+val business = spark.read.json("/usr/garima/yelp_academic_dataset_business.json")
+
+val biz = business.withColumn("category", explode(
+    when(col("categories").isNotNull, col("categories"))
+    .otherwise(array(lit(null).cast("string")))
+    ))
+
+biz.registerTempTable("bizness")
+
+val df = spark.sql("select city,category,sum(review_count) from bizness where city='Pittsburgh' OR city='Charlotte' OR city='Madison' OR city='Phoenix' OR city='Cleveland' OR city='Urbana' OR city='Las Vegas' group by city,category Order by city")
+df.write
+  .option("header", "true")
+  .csv("/usr/garima/spark_q1.csv")

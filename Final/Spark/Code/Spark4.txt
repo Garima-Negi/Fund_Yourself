@@ -1,0 +1,27 @@
+import spark.implicits._
+import org.apache.spark.sql.functions._
+import scala.collection.mutable.WrappedArray
+
+val spark = new org.apache.spark.sql.SQLContext(sc)
+val business = spark.read.json("/usr/garima/yelp_academic_dataset_business.json")
+val b = business.withColumn("category", explode(
+    when(col("categories").isNotNull, col("categories"))
+    .otherwise(array(lit(null).cast("string")))
+    ))
+    
+val user = spark.read.json("/usr/garima/yelp_academic_dataset_user.json")
+val review = spark.read.json("/usr/garima/yelp_academic_dataset_review.json")
+
+b.registerTempTable("business")
+user.registerTempTable("user")
+review.registerTempTable("review")
+
+val top_ten_reviewers=spark.sql("SELECT user_id,review_count FROM user ORDER BY review_count DESC LIMIT 10")
+top_ten_reviewers.registerTempTable("top_ten_reviewers")
+val user_review_join=spark.sql("SELECT tr.user_id,rw.business_id,rw.stars FROM top_ten_reviewers AS tr,review AS rw WHERE rw.user_id=tr.user_id")
+user_review_join.registerTempTable("user_review_join")
+val df=spark.sql("SELECT u.user_id,avg(u.stars),biz.category FROM user_review_join AS u,business AS biz where biz.business_id=u.business_id GROUP BY u.user_id,biz.category ORDER BY user_id,category")
+
+df.write
+  .option("header", "true")
+  .csv("/usr/garima/spark_q4.csv")

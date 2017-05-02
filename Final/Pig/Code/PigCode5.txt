@@ -1,0 +1,51 @@
+SET elephantbird.jsonloader.nestedLoad 'true';
+
+businesses = LOAD '/user/gn647/yelp/yelp_academic_dataset_business.json' USING 
+                com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') as (businessJson:map[]);
+                
+bounding_box = FOREACH businesses GENERATE businessJson#'city' as city,
+                businessJson#'business_id' as business_id,
+                businessJson#'name' as name,(float)businessJson#'latitude' as latitude,
+                (float)businessJson#'longitude' as longitude, (float)businessJson#'stars' as stars,
+                FLATTEN(businessJson#'categories') as category;
+                
+filtered_output = FILTER bounding_box BY (latitude <= 43.2467) AND (latitude >= 42.90833)
+                    AND (longitude >= -89.58389) AND (longitude <= -89.25056);
+                    
+category_group = GROUP filtered_output BY category;
+
+food_filter = FILTER category_group BY (group matches '.*(Food|food).*');
+
+food_filter = FOREACH food_filter GENERATE group as category, FLATTEN(filtered_output.(business_id,
+                stars,city)) as (business_id,stars,city);
+
+top_food = ORDER food_filter BY stars DESC;
+
+top_ten = LIMIT top_food 10;
+
+bottom_food = ORDER food_filter BY stars ASC;
+
+bottom_ten = LIMIT bottom_food 10;
+
+union_food = UNION top_ten, bottom_ten;
+                
+yelp_reviews = LOAD '/user/gn647/yelp/yelp_academic_dataset_review.json' USING 
+                com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') as (reviewJson:map[]);
+                
+review_table = FOREACH yelp_reviews GENERATE (float)reviewJson#'stars' as stars,
+                reviewJson#'business_id' as business_id, reviewJson#'date' as date;
+     
+food_review_join = JOIN review_table BY business_id, union_food BY business_id;
+
+food_review = FOREACH food_review_join GENERATE review_table::business_id as business_id, 
+                review_table::stars as stars, review_table::date as date;
+
+food_review = FILTER food_review by ((SUBSTRING(date, 5, 7) matches '(01|02|03|04|05)'));
+
+food_group = GROUP food_review BY business_id;
+
+food_avg = FOREACH food_group GENERATE group as business_id, AVG(food_review.stars) as stars;
+
+food_avg = ORDER food_avg by stars DESC;
+            
+STORE food_avg INTO '/user/gn647/yelp/output/solution5';

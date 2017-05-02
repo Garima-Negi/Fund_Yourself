@@ -1,0 +1,41 @@
+SET elephantbird.jsonloader.nestedLoad 'true';
+
+userJson = LOAD '/user/gn647/yelp/yelp_academic_dataset_user.json' USING 
+                com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') as (users:map[]);
+                
+user_data = FOREACH userJson GENERATE (chararray)users#'user_id' as user_id,
+                (int)users#'review_count' as review_count;
+
+user_data_order = ORDER user_data by review_count DESC;
+
+t10_reviewers = LIMIT user_data_order 10;
+
+reviewJson = LOAD '/user/gn647/yelp/yelp_academic_dataset_review.json' USING 
+                com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') as (review:map[]);
+                
+review_data = FOREACH reviewJson GENERATE (chararray)review#'user_id' as user_id, 
+                (float)review#'stars' as stars,(chararray)review#'business_id' as business_id;
+
+review_user_join = JOIN review_data BY user_id, t10_reviewers by user_id;
+
+review_counter = FOREACH review_user_join GENERATE review_data::user_id as user_id,
+                    review_data::business_id as business_id,
+                    review_data::stars as stars;
+                    
+businessJson = LOAD '/user/gn647/yelp/yelp_academic_dataset_business.json' USING 
+                com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') as (business:map[]);
+                
+categoryID = FOREACH businessJson GENERATE (chararray)business#'business_id' AS business_id,
+                FLATTEN(business#'categories') AS category;
+                
+review_Joined = JOIN categoryID BY business_id, review_counter BY business_id;
+
+review_Final = FOREACH review_Joined GENERATE review_counter::user_id as user_id,
+                categoryID::category as category, review_counter::stars as stars;
+                
+review_Grouped = GROUP review_Final by (user_id,category);
+
+finalOutput = FOREACH review_Grouped GENERATE group.user_id as user_id,
+                group.category as category, AVG(reviewFinal.stars) as stars;               
+
+STORE finalOutput into '/user/gn647/yelp/output/solution4.out';  

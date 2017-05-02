@@ -1,0 +1,16 @@
+SET elephantbird.jsonloader.nestedLoad 'true';
+businesses = LOAD '/user/gn647/yelp/yelp_academic_dataset_business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') as (bizjson:map[]);
+STORE businesses INTO '/user/gn647/yelp/output/randomfile.out';
+biz_flat = FOREACH businesses GENERATE (int)bizjson#'review_count' as review_count,
+                    bizjson#'city' as city,flatten(bizjson#'categories') as categories;
+
+bizgrup_cities_categories = GROUP biz_flat BY (city,categories); 
+
+bizgrup_sum = FOREACH bizgrup_cities_categories GENERATE group.city AS city, 
+        group.categories AS category, SUM(biz_flat.review_count) as count;
+        
+bizgrup_filter = FILTER bizgrup_sum BY (city == 'Pittsburgh') OR (city == 'Charlotte') OR  
+                (city == 'Phoenix') OR (city == 'Cleveland') OR 
+               (city == 'Urbana') OR (city == 'Las Vegas') OR (city == 'Madison');
+
+STORE bizgrup_filter INTO '/user/gn647/yelp/output/sol1' using PigStorage(',');

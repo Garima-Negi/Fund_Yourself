@@ -1,0 +1,20 @@
+SET elephantbird.jsonloader.nestedLoad 'true';
+
+businesses = LOAD '/user/gn647/yelp/yelp_academic_dataset_business.json' USING 
+                com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') as (bizJson:map[]);
+                
+biz_3 = FOREACH businesses GENERATE bizJson#'city' as city,
+                bizJson#'name' as name,(float)bizJson#'latitude' as latitude,
+                (float)bizJson#'longitude' as longitude, (float)bizJson#'stars' as stars,
+                FLATTEN(bizJson#'categories') as category;
+                
+filtered_output = FILTER biz_3 BY (latitude <= 43.2467) AND (latitude >= 42.90833)
+                    AND (longitude >= -89.58389) AND (longitude <= -89.25056);
+                    
+biz_group = GROUP filtered_output BY category;
+
+average_stars = FOREACH biz_group GENERATE group as category, AVG(filtered_output.stars) as stars;
+
+final = ORDER average_stars by stars DESC;
+                
+STORE final INTO '/user/gn647/yelp/output/solution3.out' using PigStorage(',');
